@@ -5,12 +5,15 @@ from dotenv import load_dotenv
 from os.path import join, dirname
 from sqlalchemy import func as alchemyFn
 from datetime import datetime
+import json
 
 Base = declarative_base()
 
 dotenv_path = join(dirname(__file__), '.env')
 load_dotenv(dotenv_path)
 
+DSN = os.environ.get("DSN")
+engine = sq.create_engine(DSN)
 
 class publisher(Base):
     __tablename__ = "publisher"
@@ -20,7 +23,6 @@ class publisher(Base):
 
     def __str__(self):
         return f'publisher id: {self.id}, publisher name: {self.name}'
-
 
 class book(Base):
     __tablename__ = "book"
@@ -33,7 +35,6 @@ class book(Base):
     def __str__(self):
         return f'book id: {self.id}, book title: {self.title}, id_publisher: {self.id_publisher}'
 
-
 class shop(Base):
     __tablename__ = "shop"
 
@@ -42,7 +43,6 @@ class shop(Base):
 
     def __str__(self):
         return f'shop id: {self.id}, shop name: {self.name}'
-
 
 class stock(Base):
     __tablename__ = "stock"
@@ -57,7 +57,6 @@ class stock(Base):
     def __str__(self):
         return f'stock id: {self.id}, id_shop: {self.id_shop}, id_book: {self.id_book}, count: {self.count}'
 
-
 class sale(Base):
     __tablename__ = "sale"
 
@@ -71,14 +70,12 @@ class sale(Base):
     def __str__(self):
         return f'id: {self.id}, price: {self.price}, id_stock: {self.id_stock}, date_sale: {self.date_sale}, count:{self.count}'
 
-
 def check_publisher(name):
     q = session.query(publisher).filter(alchemyFn.lower(publisher.name) == name.lower()).all()
     if not q:
         return True
     else:
         return False
-
 
 def add_publisher(name):
     if check_publisher(name):
@@ -88,14 +85,12 @@ def add_publisher(name):
     else:
         print(f"Автор {name} уже внесен в базу")
 
-
 def check_book(title, id_publisher):
     q = session.query(book).filter(alchemyFn.lower(book.title) == title.lower(), id_publisher == id_publisher).all()
     if not q:
         return True
     else:
         return False
-
 
 def add_book(title, id_publisher):
     if check_book(title, id_publisher):
@@ -105,14 +100,12 @@ def add_book(title, id_publisher):
     else:
         print(f"Книга {title} уже внесена в базу")
 
-
 def check_shop(name):
     q = session.query(shop).filter(alchemyFn.lower(shop.name) == name.lower()).all()
     if not q:
         return True
     else:
         return False
-
 
 def add_shop(name):
     if check_shop(name):
@@ -122,14 +115,12 @@ def add_shop(name):
     else:
         print(f"Магазин {name} уже введен в базу")
 
-
 def check_stok(id_shop, id_book):
     q = session.query(stock).filter(stock.id_shop == id_shop, stock.id_book == id_book).all()
     if not q:
         return True
     else:
         return False
-
 
 def add_stock(id_shop, id_book, count):
     if check_stok(id_shop, id_book):
@@ -138,7 +129,6 @@ def add_stock(id_shop, id_book, count):
         session.commit()
     else:
         print("Книга уже продается в данном магазине")
-
 
 def check_sale(id_stock, count):
     q = session.query(stock).filter(stock.id == id_stock).all()
@@ -152,14 +142,12 @@ def check_sale(id_stock, count):
     else:
         print(f"id_stock {id_stock} не существует")
 
-
 def add_sale(price, id_stock, count):
     if check_sale(id_stock, count):
         new_sale = sale(price=price, id_stock=id_stock, count=count)
         session.query(stock).filter(stock.id == id_stock).update({stock.count: stock.count - count})
         session.add(new_sale)
         session.commit()
-
 
 def get_publisher_data(publiher_):
     data = session.query(
@@ -171,79 +159,50 @@ def get_publisher_data(publiher_):
     ).join(book).join(stock).join(shop).join(sale).filter(
         (alchemyFn.lower(publisher.name)).like(f"%{publiher_}%")
     ).all()
-    return data
-
+    if data:
+        for item in data:
+            title = item[1]
+            shop_name = item[2]
+            price = item[3]
+            date = datetime.strftime(item[4], f'%d-%m-%Y')
+            print(f'{title:<50} | {shop_name:<30} | {price:<10} | {date}')
+    else:
+        print(f"Автор {publiher_} отсутствует в базе")
 
 def create_tables(engine):
     Base.metadata.create_all(engine)
 
-
 def delete_tables(engine):
     Base.metadata.drop_all(engine)
 
+def upload_test_data(test_data):
+    delete_tables(engine)
+    create_tables(engine)
+    
+    with open(test_data) as file:
+        data = json.load(file)
 
-DSN = os.environ.get("DSN")
-engine = sq.create_engine(DSN)
-
-Session = sessionmaker(bind=engine)
-session = Session()
-
-delete_tables(engine)
-
-create_tables(engine)
-
-add_publisher(name="Александр Сергеевич Пушкин")
-add_publisher(name="Лев Николаевич Толстой")
-
-add_book(title="Руслан и Людмила", id_publisher=1)
-add_book(title="Капитанская дочка", id_publisher=1)
-add_book(title="Евгений Онегин", id_publisher=1)
-
-add_book(title="После бала", id_publisher=2)
-add_book(title="Война и Мир", id_publisher=2)
-add_book(title="Анна Каренина", id_publisher=2)
-
-add_shop(name="Буквоед")
-add_shop(name="Лабиринт")
-add_shop(name="Книжный дом")
-
-add_stock(id_shop=1, id_book=1, count=10)
-add_stock(id_shop=2, id_book=1, count=2)
-
-add_stock(id_shop=1, id_book=2, count=7)
-add_stock(id_shop=2, id_book=2, count=5)
-add_stock(id_shop=3, id_book=2, count=1)
-
-add_stock(id_shop=2, id_book=3, count=8)
-add_stock(id_shop=3, id_book=3, count=2)
-
-add_stock(id_shop=1, id_book=4, count=4)
-add_stock(id_shop=2, id_book=5, count=7)
-add_stock(id_shop=2, id_book=6, count=11)
-
-add_sale(price=450, id_stock=1, count=1)
-add_sale(price=380, id_stock=2, count=1)
-add_sale(price=500, id_stock=3, count=2)
-add_sale(price=490, id_stock=4, count=2)
-add_sale(price=520, id_stock=5, count=1)
-add_sale(price=420, id_stock=6, count=2)
-add_sale(price=520, id_stock=7, count=1)
-add_sale(price=620, id_stock=8, count=1)
-add_sale(price=560, id_stock=9, count=1)
-add_sale(price=550, id_stock=10, count=3)
+    for line in data:
+        if line["model"] == "publisher":
+            add_publisher(name=line["fields"]["name"])
+        elif line["model"] == "book":
+            add_book(title=line["fields"]["title"], id_publisher=line["fields"]["id_publisher"])
+        elif line["model"] == "shop":
+            add_shop(name=line["fields"]["name"])
+        elif line["model"] == "stock":
+            add_stock(id_shop=line["fields"]["id_shop"], id_book=line["fields"]["id_book"],
+                      count=line["fields"]["count"])
+        elif line["model"] == "sale":
+            add_sale(price=line["fields"]["price"], id_stock=line["fields"]["id_stock"], count=line["fields"]["count"])
 
 
 if __name__ == '__main__':
-    publiher_ = input('Введите автора:').lower()
-    data = get_publisher_data(publiher_)
-    if data:
-        for item in data:
-            title = item[1]
-            shop = item[2]
-            price = item[3]
-            date = datetime.strftime(item[4], f'%d-%m-%Y')
-            print(f'{title:<50} | {shop:<30} | {price:<10} | {date}')
-    else:
-        print(f"Автор {publiher_} отсутствует в базе")
+    Session = sessionmaker(bind=engine)
+    session = Session()
 
-session.close()
+    upload_test_data('test_data.json')
+    publiher_ = input('Введите автора:').lower()
+    get_publisher_data(publiher_)
+
+    session.close()
+
